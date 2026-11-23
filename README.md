@@ -52,11 +52,11 @@ A precision evaluation framework for evaluating multi-step autonomous agent traj
 ## CLI Usage
 
 ```bash
-python projects/agentic_tool_eval_harness/main.py --data projects/agentic_tool_eval_harness/sample_agent_trajectories.jsonl
+python main.py --data sample_agent_trajectories.jsonl
 ```
 
 ## Running Tests
 
 ```bash
-pytest projects/agentic_tool_eval_harness
+pytest -v
 ```

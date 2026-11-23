@@ -195,3 +195,56 @@ def test_empty_trajectory_edge_case():
     assert summary.total_steps == 0
     assert summary.tool_call_count == 0
     assert summary.valid_tool_count == 0
+
+
+def test_fuzzy_matched_recall_and_required_arguments():
+    registry = {
+        "lookup_user": ToolSignature(name="lookup_user", required=["user"]),
+    }
+    traj = AgentTrajectory(
+        trajectory_id="fuzzy_recall",
+        task_goal="Lookup balance for user user_123",
+        ground_truth_tools=["lookup_user"],
+        steps=[
+            TrajectoryStep(
+                step_index=0,
+                action=ToolCallRecord(tool_name="lookup_usr", arguments={"user": "user_123"}),
+            ),
+            TrajectoryStep(
+                step_index=1,
+                action=ToolCallRecord(tool_name="lookup_user", arguments={}),
+            ),
+        ],
+        success=True,
+    )
+    summary = evaluate_trajectory(traj, registry)
+    assert summary.tool_call_recall == 1.0
+    assert summary.valid_tool_count == 1
+    assert summary.tool_call_precision == 0.5
+
+
+def test_multi_token_argument_grounding_rate():
+    traj = AgentTrajectory(
+        trajectory_id="multi_token_grounding",
+        task_goal="Query items table on cluster prod-1",
+        ground_truth_tools=["db_query"],
+        steps=[
+            TrajectoryStep(
+                step_index=0,
+                action=ToolCallRecord(
+                    tool_name="db_query",
+                    arguments={
+                        "cluster": "prod-1",
+                        "query": "SELECT * FROM items WHERE id = 'ghost_111' and code = 'phantom_222'",
+                    },
+                ),
+            )
+        ],
+        success=True,
+    )
+    summary = evaluate_trajectory(
+        traj,
+        {"db_query": ToolSignature(name="db_query", required=["cluster", "query"])},
+    )
+    assert summary.hallucinated_argument_count == 2
+    assert summary.rubric_score == pytest.approx(0.875)

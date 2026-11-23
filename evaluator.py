@@ -117,6 +117,7 @@ def evaluate_trajectory(
     called_tools: list[str] = []
     valid_tool_count = 0
     hallucinated_args: list[dict[str, Any]] = []
+    hallucinated_arg_keys = 0
     total_arg_values_checked = 0
     total_latency_ms = 0.0
     total_cost_usd = 0.0
@@ -131,25 +132,29 @@ def evaluate_trajectory(
 
         if step.action:
             action = step.action
-            called_tools.append(action.tool_name)
             total_latency_ms += action.execution_time_ms
             total_cost_usd += action.cost_usd
 
             # Check tool validity
+            resolved_name = action.tool_name
             if tool_registry:
                 matched_sig, sim = match_tool_signature(action.tool_name, tool_registry)
                 if matched_sig is not None:
-                    valid_tool_count += 1
+                    resolved_name = matched_sig.name
+                    if all(req_arg in action.arguments for req_arg in matched_sig.required):
+                        valid_tool_count += 1
             else:
                 # If no registry provided, check against ground truth tools
                 if action.tool_name in trajectory.ground_truth_tools:
                     valid_tool_count += 1
+            called_tools.append(resolved_name)
 
             # Check argument grounding
             total_arg_values_checked += max(1, len(action.arguments))
 
             unfound = find_hallucinated_arguments(action, accumulated_context)
             hallucinated_args.extend(unfound)
+            hallucinated_arg_keys += len({h["argument"].split(".")[0] for h in unfound})
 
             # Context absorbs action output / observation
             if action.output:
@@ -171,7 +176,7 @@ def evaluate_trajectory(
 
     # Grounding rate
     if total_arg_values_checked > 0:
-        grounding_rate = max(0.0, 1.0 - (len(hallucinated_args) / total_arg_values_checked))
+        grounding_rate = max(0.0, 1.0 - (hallucinated_arg_keys / total_arg_values_checked))
     else:
         grounding_rate = 1.0
 
